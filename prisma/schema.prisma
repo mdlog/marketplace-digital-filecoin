@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  walletAddress String? @unique
+  avatar       String?
+  bio          String?
+  isCreator    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  assets       DigitalAsset[]
+  purchases    Purchase[]
+  reviews      Review[]
+  licenses     License[]
+  transactions Transaction[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assets DigitalAsset[]
+}
+
+model DigitalAsset {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  price       Float
+  currency    String   @default("USD")
+  tags        String?  // JSON string array of tags
+  isPublished Boolean  @default(false)
+  isFeatured  Boolean  @default(false)
+  views       Int      @default(0)
+  downloads   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Filecoin/IPFS related fields
+  cid         String?  // Content Identifier for IPFS
+  fileSize    Int?     // File size in bytes
+  fileType    String?  // MIME type
+  thumbnailCid String? // Thumbnail CID
+  
+  // Relations
+  creatorId   String
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  files       AssetFile[]
+  purchases   Purchase[]
+  reviews     Review[]
+  licenses    License[]
+}
+
+model AssetFile {
+  id        String   @id @default(cuid())
+  name      String
+  size      Int
+  type      String
+  cid       String   // IPFS CID
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  assetId   String
+  asset     DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id          String   @id @default(cuid())
+  type        String   // e.g., 'standard', 'extended', 'exclusive'
+  price       Float
+  description String?
+  duration    Int?     // License duration in days (null = perpetual)
+  maxUses     Int?     // Maximum usage count (null = unlimited)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  assetId     String
+  asset       DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  purchaserId String
+  purchaser   User         @relation(fields: [purchaserId], references: [id], onDelete: Cascade)
+  purchases   Purchase[]
+}
+
+model Purchase {
+  id          String      @id @default(cuid())
+  amount      Float
+  currency    String      @default("USD")
+  status      PurchaseStatus @default(PENDING)
+  transactionHash String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  buyerId     String
+  buyer       User        @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  licenseId   String?
+  license     License?    @relation(fields: [licenseId], references: [id])
+  transaction Transaction?
+}
+
+model Transaction {
+  id          String           @id @default(cuid())
+  hash        String           @unique
+  amount      Float
+  currency    String           @default("USD")
+  status      TransactionStatus @default(PENDING)
+  type        TransactionType
+  blockNumber Int?
+  gasUsed     Int?
+  gasPrice    Float?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchaseId  String?  @unique
+  purchase    Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId   String
+  asset     DigitalAsset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionType {
+  PURCHASE
+  REFUND
+  WITHDRAWAL
+  DEPOSIT
+}
